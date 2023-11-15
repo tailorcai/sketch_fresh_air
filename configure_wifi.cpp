@@ -4,8 +4,6 @@
 #include <WiFi.h>
 // #include <WiFiManager.h>
 // #include <ArduinoJson.h>
-#include <Ticker.h>
-#include <elapsedMillis.h>
 
 #include "config.h"
 
@@ -233,7 +231,11 @@ void reconnectWiFi() {
         Serial.println("Failed to connect to WiFi");        
       } else {
         Serial.println("WiFi Connected");   
-        // ticker.detach();     
+        // ticker.detach();   
+        Serial.println("");
+        Serial.println("WiFi connected.");
+        Serial.println("IP address: ");
+        Serial.println(WiFi.localIP());          
       }
     }
   }

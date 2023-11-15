@@ -1,24 +1,36 @@
 #include "config.h"
 #include "mqtt.h"
 
+
+#define ON_OFF_PEROID 5 // seconds
 class FanState {
   public:
     int st_speed;
     int st_heating;
+    elapsedSeconds on_off_protect;   // forbid from on/off simutaniously
 
     FanState():st_speed(0),st_heating(0) {
 
     }
 
     void set_speed(int new_speed) {
+      if( on_off_protect < ON_OFF_PEROID ) {
+        Serial.println("protected period");
+        this->percentage_state_notify();
+        this->state_notify();
+        return;
+      }
       bool dirty = this->st_speed != new_speed;
       bool onoff = ( this->st_speed * new_speed == 0 );
       this->st_speed = new_speed;
 
       if( dirty ) {
         this->percentage_state_notify();
-        if( onoff )
+        if( onoff ) {
           this->state_notify();
+          on_off_protect = 0;
+          led_set_pending();
+        }
         if( this->st_speed == 0 )
           this->st_heating = 0;
       }

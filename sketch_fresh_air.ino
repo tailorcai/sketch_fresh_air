@@ -24,86 +24,72 @@ PubSubClient mqttClient(wifiClient);
 
 void tick() {
   //toggle state
-  // int state = digitalRead(CONFIG_PIN_STATUS);  // get the current state of GPIO1 pin
-  // digitalWrite(CONFIG_PIN_STATUS, !state);     // set pin to the opposite state
+  int state = digitalRead(STARTUP_LED);  // get the current state of GPIO1 pin
+  digitalWrite(STARTUP_LED, !state);     // set pin to the opposite state
 }
-TickTwo ticker(tick,500);
-// WiFiServer server(80);
+class LEDIndicator {
+  private:
+    bool op_pending;
+    TickTwo ticker;
+    elapsedSeconds peroid;
 
+  public:
+    LEDIndicator():op_pending(false), 
+                  ticker(tick,1000,0,MILLIS) {
+                    ticker.start();
+                  }
+    void set_pending() {
+      if( !this->op_pending ) {
+          ticker.interval(100);
+          this->op_pending = true;
+          this->peroid = 0;
+      }
+    }
+    void loop() {
+      this->ticker.update();
+
+      if( this->op_pending ) {
+        if( this->peroid > 5 ) {
+          ticker.interval(1000);
+          this->op_pending = false;
+        }
+      }
+    }
+} indicator;
+// TickTwo ticker(tick,1000, 0, MILLIS);
+
+void led_set_pending() {
+  indicator.set_pending();
+}
 
 OneButton button(PIN_BUTTON, true); // low enabled
-
 hw_timer_t *watchdog_timer = NULL;    // watchdog timer
 
-
-
-void click() {
+void button_click() {
   Serial.println("button pressed");
   fan_toggle_speed();
 }
 
-
-
-void longPressed() {
-  fan_toggle_heat();
-  
+void button_longPressed() {
+  Serial.println("button long_pressed");
+  fan_toggle_heat();  
 }
 
 void watchDogInterrupt()
 {
    Serial.println("time out");
-   esp_restart();
+   esp_restart();   // ESP only
 }
-
-  // char temp[] = R"({
-  //  "device_class": "temperature",
-  //  "name": "office_Temperature",
-  //  "state_topic": "homeassistant/sensor/office_pc/state",
-  //  "unit_of_measurement": "°C","value_template": "{{ value_json.temperature}}"})";
-
-  // char Humidity[] = R"({
-  //  "device_class": "humidity",
-  //  "name": "office_Humidity",
-  //  "state_topic": "homeassistant/sensor/office_pc/state",
-  //  "unit_of_measurement": "%",
-  //  "value_template": "{{ value_json.humidity}}"})";
-
-// void reconnect() {
-//   // Loop until we're reconnected
-//   while (!client.connected()) {
-//     Serial.print("Attempting MQTT connection...");
-//       if(client.connect("homeassistant/sensor/", "coolcall", "123123"))//clientID, userName, userPassword
-//       {
-//       client.publish("homeassistant/sensor/office_pc_H/config", Humidity);
-//       client.publish("homeassistant/sensor/office_pc_T/config", temp);
-//     } else {
-//       Serial.print("failed, rc=");
-//       Serial.print(client.state());
-//       Serial.println(" try again in 5 seconds");
-//       // Wait 5 seconds before retrying
-//       delay(5000);
-//     }
-//   }
-// }
 
 void setup_mqtt() {
     mqttClient.setServer(mqtt_server,1883);
-    // client is now configured for use
-    // if (!mqttClient.connected()) {
-    //   reconnect();
-    // } 
 }
 
 void setup_wifi()
 {
     // We start by connecting to a WiFi network
     WiFi.begin(ssid, password);
-    // int count = 0;
-    // while (  WiFi.status() != WL_CONNECTED && count < 10) {
-    //     delay(500);
-    //     count++;
-    //     Serial.print(".");
-    // }
+    delay(100);
 
     if( WiFi.status() == WL_CONNECTED ) {
       // digitalWrite( WIFI_LED, HIGH );
@@ -112,12 +98,8 @@ void setup_wifi()
       Serial.println("WiFi connected.");
       Serial.println("IP address: ");
       Serial.println(WiFi.localIP());
-    
     }
-
 }
-
-//
 
 void setup()
 {
@@ -139,32 +121,24 @@ void setup()
   button.reset();//清除一下按钮状态机的状态
   button.setDebounceTicks(50);  // 设置按键消抖时长
   button.setClickTicks(500);        // 设置点击时长
-  button.attachClick(click);
+  button.attachClick(button_click);
 
   button.setPressTicks(2000);      // 长按时间判定，800ms后算长按
-  button.attachLongPressStart(longPressed);
+  button.attachLongPressStart(button_longPressed);
 
   // setup watchdog
   watchdog_timer = timerBegin(1, 80, true);
   timerAttachInterrupt(watchdog_timer, watchDogInterrupt, true);
   timerAlarmWrite(watchdog_timer,10000*1000,true); // 10s触发 
   timerAlarmEnable(watchdog_timer);
+
+  // ticker.start();
 }
 
 void loop()
 {
   timerWrite(watchdog_timer, 0);  // reset watchdog
   button.tick();
-  // Serial.print(".");
-  // if( st_speed == 2 )
-  //   delay(6000); // this will trigger watchdog
-
-  // if( network_ready == WL_CONNECTED )
-    // loop_server();
-
-  // char msg[100];
-  // sprintf(msg,"{\"temperature\":%d, \"humidity\":%d}",(int)37,(int)80);//{"temperature":30, "humidity":40}
-  // client.publish("homeassistant/sensor/office_pc/state", msg); 
 
   static bool just_connected = false;
   // network maintainness
@@ -184,7 +158,6 @@ void loop()
     }
   }
 
-  ticker.update();
-  // updateFanSpeedFromSwitch();  
-  // delay(10);
+  // ticker.update();
+  indicator.loop();
 }
